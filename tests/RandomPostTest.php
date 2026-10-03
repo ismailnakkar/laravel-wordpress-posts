@@ -192,4 +192,33 @@ final class RandomPostTest extends TestCase
         $this->assertNull($this->posts()->random());
         $this->assertFalse(Cache::get('wordpress-posts:post:' . $id));
     }
+
+    public function test_an_empty_id_list_is_cached_only_for_the_outage_window(): void
+    {
+        $this->withBlog();
+        $this->assertNull($this->posts()->random());
+
+        $this->seedPost(['post_title' => 'First post']);
+        $this->travel(301)->seconds();
+
+        $this->assertSame('First post', $this->posts()->random()?->title);
+    }
+
+    public function test_a_post_gone_since_the_list_was_cached_is_skipped(): void
+    {
+        $this->withBlog();
+        $gone = $this->seedPost(['post_title' => 'Gone']);
+        $kept = $this->seedPost(['post_title' => 'Kept']);
+        $this->posts()->random();
+
+        // The warm-up cached whichever post it drew; keep only the ids list cached.
+        Cache::forget('wordpress-posts:post:' . $gone);
+        Cache::forget('wordpress-posts:post:' . $kept);
+
+        DB::connection('blog')->table('posts')->where('ID', $gone)->delete();
+
+        foreach (range(1, 32) as $ignored) {
+            $this->assertSame('Kept', $this->posts()->random()?->title);
+        }
+    }
 }

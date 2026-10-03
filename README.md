@@ -6,12 +6,20 @@ safe to echo, and harmless when the blog is down.
 It exists for one job: a filler post beside the real content of a page. It reads WordPress's
 database directly, read-only, and never calls WordPress itself.
 
+- [Requirements](#requirements)
 - [Install](#install)
 - [Use](#use)
 - [What you get](#what-you-get)
 - [Caching and outages](#caching-and-outages)
 - [Configuration](#configuration)
 - [Testing](#testing)
+- [Licence](#licence)
+
+## Requirements
+
+PHP 8.4 with `ext-dom`, Laravel 12.1 or 13, and a MySQL or MariaDB connection through mysqlnd. The
+bounded read (see [Caching and outages](#caching-and-outages)) works only on mysqlnd; on another
+driver it is skipped silently.
 
 ## Install
 
@@ -98,6 +106,12 @@ on `null`.
   Cache::forget('wordpress-posts:ids');         // the list it is drawn from
   ```
 
+- **An empty blog is retried soon.** An empty id list is cached for `outage` seconds, not `cache`,
+  so a blog that had no published post yet gives filler shortly after its first one.
+
+- **A gone post is skipped.** If the drawn post was deleted or unpublished since the id list was
+  cached, one other id is drawn before giving up.
+
 - **A failing database is left alone.** Any failure (an unreachable host, a missing table, a
   missing connection) is reported through the exception handler and leaves the database alone for
   `outage` seconds (5 minutes). Cached posts are still shown meanwhile, as long as the id list is
@@ -154,3 +168,7 @@ The package's own checks:
 ```bash
 composer check
 ```
+
+## Licence
+
+MIT.

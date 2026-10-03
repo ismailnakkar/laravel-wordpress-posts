@@ -62,7 +62,17 @@ class WordPressPosts
         try {
             $ids = $this->remember(self::IDS_KEY, fn (): array => array_map(intval(...), $this->query()->pluck('ID')->all())) ?? [];
 
-            return $ids === [] ? null : $this->post($ids[array_rand($ids)]);
+            // A second draw when the first is gone: a deleted post stays in the cached list.
+            $keys = $ids === [] ? [] : (array)array_rand($ids, min(2, count($ids)));
+            shuffle($keys);
+
+            foreach ($keys as $key) {
+                if (($post = $this->post($ids[$key])) !== null) {
+                    return $post;
+                }
+            }
+
+            return null;
         } catch (Throwable $e) {
             // The claim taken in remember() stays behind as the outage marker for the whole window.
             report($e);
@@ -80,9 +90,13 @@ class WordPressPosts
         // `false`, not null: a cached null reads as a miss. An array, not a Post: an app may refuse
         // to unserialize objects from its cache (`cache.serializable_classes`).
         $post = $this->remember(self::POST_KEY . $id, function () use ($id): array|false {
-            $row = $this->query()->where('ID', $id)->first(['post_title', 'post_content']);
+            // A too-long body comes back as null, so it is never loaded into PHP.
+            $row = $this->query()->where('ID', $id)->selectRaw(
+                'post_title, CASE WHEN LENGTH(post_content) > ? THEN NULL ELSE post_content END AS post_content',
+                [self::MAX_BYTES],
+            )->first();
 
-            if ($row === null || strlen((string)$row->post_content) > self::MAX_BYTES) {
+            if ($row === null || $row->post_content === null) {
                 return false;
             }
 
@@ -126,7 +140,8 @@ class WordPressPosts
 
         $value = $read();
 
-        $this->cache->put($key, $value, (int)$this->config->get('wordpress-posts.cache'));
+        // An empty list is held only for the outage window: a blog still being built must not stay empty for a month.
+        $this->cache->put($key, $value, (int)$this->config->get($value === [] ? 'wordpress-posts.outage' : 'wordpress-posts.cache'));
         $this->cache->forget(self::OUTAGE_KEY);
 
         return $value;
