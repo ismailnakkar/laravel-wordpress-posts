@@ -13,6 +13,7 @@ database directly, read-only, and never calls WordPress itself.
 - [Caching and outages](#caching-and-outages)
 - [Configuration](#configuration)
 - [Testing](#testing)
+- [Upgrading](#upgrading)
 - [Licence](#licence)
 
 ## Requirements
@@ -168,6 +169,13 @@ The package's own checks:
 ```bash
 composer check
 ```
+
+## Upgrading
+
+### From 1.0
+
+Nothing to change. 1.0.1 caches an empty id list for `outage` seconds instead of `cache`, draws a
+second id when the first post is gone, and skips a post over 200 KB in SQL instead of loading it.
 
 ## Licence
 
