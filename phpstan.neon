@@ -1,0 +1,14 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 8
+    paths:
+        - src
+        - tests
+    ignoreErrors:
+        # Group 0 always matches; PHPStan types it nullable under PREG_UNMATCHED_AS_NULL.
+        -
+            identifier: argument.type
+            message: '#strlen expects string, string\|null given#'
+            path: src/WordPressPosts.php

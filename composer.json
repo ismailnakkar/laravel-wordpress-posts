@@ -22,6 +22,7 @@
         "laravel/framework": "^12.1 || ^13.0"
     },
     "require-dev": {
+        "larastan/larastan": "^3.12",
         "laravel/pint": "^1.19",
         "orchestra/testbench": "^10.0 || ^11.0",
         "phpunit/phpunit": "^11.5 || ^12.0"
@@ -39,8 +40,10 @@
     "scripts": {
         "test": "vendor/bin/phpunit",
         "lint": "vendor/bin/pint",
+        "analyse": "vendor/bin/phpstan analyse --memory-limit=1G",
         "check": [
             "vendor/bin/pint --test",
+            "@analyse",
             "vendor/bin/phpunit"
         ]
     },

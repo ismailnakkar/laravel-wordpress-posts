@@ -25,7 +25,7 @@ abstract class TestCase extends BaseTestCase
 
     protected function posts(): WordPressPosts
     {
-        return $this->app->make(WordPressPosts::class);
+        return app(WordPressPosts::class);
     }
 
     /** A WordPress `posts` table behind the default `blog` connection, prefixed as WordPress prefixes it. */

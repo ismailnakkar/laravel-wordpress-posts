@@ -51,7 +51,11 @@ class WordPressPosts
         private readonly Config $config,
     ) {}
 
-    /** A random published post; null when there is none to show, or when it is not cached and cannot be read now. */
+    /**
+     * A random published post; null when there is none to show, or when it is not cached and cannot be read now.
+     *
+     * @phpstan-impure
+     */
     public function random(): ?Post
     {
         // mysqlnd reads this when a connection opens. PDO::ATTR_TIMEOUT bounds only the connect: a host
