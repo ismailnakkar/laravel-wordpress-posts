@@ -4,8 +4,14 @@ declare(strict_types=1);
 
 namespace WordPressPosts\Tests;
 
+use Illuminate\Cache\Events\CacheHit;
+use Illuminate\Cache\Events\CacheMissed;
+use Illuminate\Cache\Events\KeyForgotten;
+use Illuminate\Cache\Events\KeyWritten;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Exceptions;
 use WordPressPosts\Post;
 use WordPressPosts\WordPressPosts;
 
@@ -133,6 +139,47 @@ final class RandomPostTest extends TestCase
         $this->posts()->random();
 
         $this->assertSame(['7', '7'], $during, 'The id list and the post are each read under it.');
+        $this->assertSame($previous, ini_get('mysqlnd.net_read_timeout'));
+    }
+
+    public function test_the_cache_is_used_under_the_apps_read_timeout(): void
+    {
+        // A `database` cache store whose connection is not open yet would open it under the short
+        // timeout and keep it for the rest of the request, or the worker's life.
+        $previous = ini_get('mysqlnd.net_read_timeout');
+
+        if ($previous === false) {
+            $this->markTestSkipped('mysqlnd is not loaded.');
+        }
+
+        config(['wordpress-posts.timeout' => 7]);
+        $this->withBlog();
+        $this->seedPost();
+
+        $during = [];
+        Event::listen([CacheHit::class, CacheMissed::class, KeyWritten::class, KeyForgotten::class], function () use (&$during): void {
+            $during[] = ini_get('mysqlnd.net_read_timeout');
+        });
+
+        $this->assertNotNull($this->posts()->random());
+        $this->assertNotSame([], $during);
+        $this->assertSame([$previous], array_values(array_unique($during)));
+    }
+
+    public function test_a_failed_read_restores_the_read_timeout(): void
+    {
+        $previous = ini_get('mysqlnd.net_read_timeout');
+
+        if ($previous === false) {
+            $this->markTestSkipped('mysqlnd is not loaded.');
+        }
+
+        Exceptions::fake();
+        config(['wordpress-posts.timeout' => 7]);
+        $this->withBlog(withTable: false);
+
+        $this->assertNull($this->posts()->random());
+        Exceptions::assertReportedCount(1);
         $this->assertSame($previous, ini_get('mysqlnd.net_read_timeout'));
     }
 

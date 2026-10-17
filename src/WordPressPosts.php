@@ -58,11 +58,6 @@ class WordPressPosts
      */
     public function random(): ?Post
     {
-        // mysqlnd reads this when a connection opens. PDO::ATTR_TIMEOUT bounds only the connect: a host
-        // that accepts and then says nothing would otherwise hold the page for mysqlnd's default day.
-        // Whole seconds: mysqlnd warns on a fraction, and 0 means no bound at all.
-        $readTimeout = ini_set('mysqlnd.net_read_timeout', (string)max(1, (int)$this->config->get('wordpress-posts.timeout')));
-
         try {
             $ids = $this->remember(self::IDS_KEY, fn (): array => array_map(intval(...), $this->query()->pluck('ID')->all())) ?? [];
 
@@ -82,10 +77,6 @@ class WordPressPosts
             report($e);
 
             return null;
-        } finally {
-            if ($readTimeout !== false) {
-                ini_set('mysqlnd.net_read_timeout', $readTimeout);
-            }
         }
     }
 
@@ -142,7 +133,19 @@ class WordPressPosts
             return null;
         }
 
-        $value = $read();
+        // mysqlnd reads this when a connection opens. PDO::ATTR_TIMEOUT bounds only the connect: a host
+        // that accepts and then says nothing would otherwise hold the page for mysqlnd's default day.
+        // Whole seconds: mysqlnd warns on a fraction, and 0 means no bound at all. Around the read
+        // alone: a cache on a connection not yet open would keep the short bound too.
+        $readTimeout = ini_set('mysqlnd.net_read_timeout', (string)max(1, (int)$this->config->get('wordpress-posts.timeout')));
+
+        try {
+            $value = $read();
+        } finally {
+            if ($readTimeout !== false) {
+                ini_set('mysqlnd.net_read_timeout', $readTimeout);
+            }
+        }
 
         // An empty list is held only for the outage window: a blog still being built must not stay empty for a month.
         $this->cache->put($key, $value, (int)$this->config->get($value === [] ? 'wordpress-posts.outage' : 'wordpress-posts.cache'));
