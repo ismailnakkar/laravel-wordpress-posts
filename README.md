@@ -44,6 +44,8 @@ Add a connection to WordPress's database in `config/database.php`, for this pack
 ],
 ```
 
+Connect as a user that can read the posts table and nothing else: `GRANT SELECT ON <database>.<prefix>posts TO …;`
+
 `blog` is the default name; `WORDPRESS_POSTS_CONNECTION` picks another.
 
 ## Use
