@@ -30,7 +30,7 @@ final class RandomPostTest extends TestCase
         $this->withBlog();
         $this->seedPost(['post_status' => 'draft']);
         $this->seedPost(['post_type' => 'attachment']);
-        $this->seedPost(['post_password' => 'secret']); // Published, but shown only with its password.
+        $this->seedPost(['post_password' => 'secret']);
 
         $this->assertNull($this->posts()->random());
         $this->assertFalse(Cache::has('wordpress-posts:outage'), 'An empty blog is not an outage.');
@@ -144,8 +144,6 @@ final class RandomPostTest extends TestCase
 
     public function test_the_cache_is_used_under_the_apps_read_timeout(): void
     {
-        // A `database` cache store whose connection is not open yet would open it under the short
-        // timeout and keep it for the rest of the request, or the worker's life.
         $previous = ini_get('mysqlnd.net_read_timeout');
 
         if ($previous === false) {
@@ -258,7 +256,7 @@ final class RandomPostTest extends TestCase
         $kept = $this->seedPost(['post_title' => 'Kept']);
         $this->posts()->random();
 
-        // The warm-up cached whichever post it drew; keep only the ids list cached.
+        // Forget whichever post the warm-up cached; keep the id list.
         Cache::forget('wordpress-posts:post:' . $gone);
         Cache::forget('wordpress-posts:post:' . $kept);
 

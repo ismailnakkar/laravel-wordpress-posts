@@ -23,8 +23,7 @@ final class OutageTest extends TestCase
 
     public function test_a_failing_database_is_tried_once_per_outage_window(): void
     {
-        // No table: the read throws, the same shape as an unreachable host. Each attempt reports once;
-        // a failing query fires no QueryExecuted, so listening on the connection would count nothing.
+        // No table fails like a dead host. Count reports: a failing query fires no QueryExecuted.
         Exceptions::fake();
         config(['wordpress-posts.outage' => 10]);
         $this->withBlog(withTable: false);

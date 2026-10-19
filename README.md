@@ -1,35 +1,21 @@
 # Laravel WordPress Posts
 
-Draw a random published post from a WordPress database and print it on a Laravel page: cached,
-safe to echo, and harmless when the blog is down.
-
-It exists for one job: a filler post beside the real content of a page. It reads WordPress's
-database directly, read-only, and never calls WordPress itself.
-
-- [Requirements](#requirements)
-- [Install](#install)
-- [Use](#use)
-- [What you get](#what-you-get)
-- [Caching and outages](#caching-and-outages)
-- [Configuration](#configuration)
-- [Testing](#testing)
-- [Upgrading](#upgrading)
-- [Licence](#licence)
-
-## Requirements
-
-PHP 8.4 with `ext-dom`, Laravel 12.1 or 13, and a MySQL or MariaDB connection through mysqlnd. The
-bounded read (see [Caching and outages](#caching-and-outages)) works only on mysqlnd; on another
-driver it is skipped silently.
+Draws a random published post from a WordPress database for a Laravel page, typically as filler
+beside the real content. It reads the database directly and read-only, caches what it reads, reduces
+the post to safe formatting HTML, and returns `null` instead of failing when the blog is down.
 
 ## Install
+
+Needs PHP 8.4 with `ext-dom` and Laravel 12.1 or 13. The read timeout works only through mysqlnd;
+without it reads are unbounded.
 
 ```bash
 composer require ismailnakkar/laravel-wordpress-posts
 php artisan vendor:publish --tag=wordpress-posts-config   # only to change a default
 ```
 
-Add a connection to WordPress's database in `config/database.php`, for this package alone:
+Give the package a connection of its own in `config/database.php`: mysqlnd applies the read timeout
+only when a connection opens, so a shared one keeps the wrong timeout.
 
 ```php
 'blog' => [
@@ -44,11 +30,27 @@ Add a connection to WordPress's database in `config/database.php`, for this pack
 ],
 ```
 
-Connect as a user that can read the posts table and nothing else: `GRANT SELECT ON <database>.<prefix>posts TO …;`
+Name it `blog`, or set `WORDPRESS_POSTS_CONNECTION`. Its user needs only
+`GRANT SELECT ON <database>.<prefix>posts TO …;`
 
-`blog` is the default name; `WORDPRESS_POSTS_CONNECTION` picks another.
+## Configuration
 
-## Use
+| Key          | Default             | Purpose                                                  |
+|--------------|---------------------|----------------------------------------------------------|
+| `connection` | `blog`              | Connection to WordPress's database.                      |
+| `timeout`    | `3`                 | `mysqlnd.net_read_timeout`, whole seconds, at least 1.   |
+| `cache`      | `2592000` (30 days) | Seconds the id list and each drawn post stay cached.     |
+| `outage`     | `300`               | Seconds a failing database is left alone.                |
+| `tags`       | see below           | Elements kept from `post_content`.                       |
+
+`tags` defaults to `p`, `h2`, `h3`, `strong`, `em`, `s`, `del`, `sup`, `sub`, `blockquote`, `ul`,
+`ol` and `li`. List formatting elements only: `div`, table parts, form controls and raw-text
+elements such as `textarea` can break the page around the post.
+
+`PDO::ATTR_TIMEOUT` bounds only the connect, `timeout` the reads; Laravel retries a lost
+connection, so one failed attempt can take about four times the larger of the two.
+
+## Usage
 
 ```php
 use WordPressPosts\WordPressPosts;
@@ -66,96 +68,42 @@ public function __invoke(WordPressPosts $posts): View
 @endisset
 ```
 
-`random()` returns a `WordPressPosts\Post`, or `null` when there is nothing to show: the blog has
-no published post, the drawn one is gone, empty or too large, or it is not cached and cannot be
-read now (the database is failing, or another request is reading it). Render the page without it
-on `null`.
+`random()` returns a `WordPressPosts\Post`, or `null` when nothing can be shown now: the blog has
+no published post; the drawn post (and one redraw) is gone, empty or too large; or the id list or
+that post is not cached while the database is failing or another request is reading it.
 
-## What you get
-
-- **`title` is plain text.** WordPress stores it as HTML (`Fish &amp; Chips`); the package decodes
-  it. Escape it with `{{ }}` like any other string.
-
-- **`content` is safe to echo unescaped.** It keeps only the configured formatting tags, always
-  without attributes, and turns WordPress's bare newlines into `<br />`. Every other element is
-  unwrapped to its text, and `script`, `style`, `template`, SVG and MathML are dropped whole.
-  Do not run it through `strip_tags()`: that keeps attributes on the tags it allows, so
-  `<h2 onmouseover=…>` survives it.
-
-- **Hidden posts and blocks stay out.** Password-protected posts are never drawn, and blocks set
-  to *Omit from published content* are left out. A block hidden only on some screen sizes is
-  shown on all of them.
-
-- **Shortcodes are not run.** WordPress's media shortcodes (`[caption]`, `[gallery]`, `[embed]`,
-  `[video]`, `[audio]`, `[playlist]`) lose their brackets, so a caption keeps its text and an
-  embed its URL. Any other shortcode prints as written.
-
-- **Crafted posts are bounded.** A post over 200 KB is never shown, and elements nested more than
-  64 deep are dropped, so the worst crafted post takes a second or two to reduce, once per cache
-  period. No real post comes close to either limit.
+- `title` is plain text, decoded from WordPress's HTML (`Fish &amp; Chips`). Escape it.
+- `content` is safe to echo unescaped: only the configured `tags` and `br`, without attributes,
+  and bare newlines as `<br />`. Other elements are unwrapped to their text; `script`, `style`,
+  `template`, SVG and MathML are dropped whole.
+- Password-protected posts are never drawn. Blocks set to *Omit from published content* are left
+  out; a block hidden only on some screen sizes shows on all of them.
+- Shortcodes are not run. WordPress's media shortcode tags (`[caption]`, `[gallery]`, `[embed]`,
+  `[video]`, `[audio]`, `[playlist]`) are removed, keeping a caption's text and an embed's URL; any
+  other shortcode prints as written.
+- A post over 200 KB is never shown, and elements nested more than 64 deep are dropped.
 
 ## Caching and outages
 
-- **Warm page views make no query.** The list of published ids and each drawn post are cached for
-  `cache` seconds (30 days). A post is cached already reduced, so a change to `tags` reaches it
-  when its cache expires.
-
-- **Changes in WordPress wait for the cache too.** A newly published post joins the draw when the
-  id list expires; an edited, unpublished or deleted one changes on the page when its own cache
-  expires. To apply a change now:
+- New, edited or deleted posts and `tags` changes show when the cache expires. To apply one now:
 
   ```php
   Cache::forget('wordpress-posts:post:' . $id); // the post
   Cache::forget('wordpress-posts:ids');         // the list it is drawn from
   ```
 
-- **An empty blog is retried soon.** An empty id list is cached for `outage` seconds, not `cache`,
-  so a blog that had no published post yet gives filler shortly after its first one.
-
-- **A gone post is skipped.** If the drawn post was deleted or unpublished since the id list was
-  cached, one other id is drawn before giving up.
-
-- **A failing database is left alone.** Any failure (an unreachable host, a missing table, a
-  missing connection) is reported through the exception handler and leaves the database alone for
-  `outage` seconds (5 minutes). Cached posts are still shown meanwhile, as long as the id list is
-  cached too; it expires first, and without it every view returns `null`.
-
-- **One request at a time reads the database.** The outage marker doubles as the claim: taken on a
-  cache miss, released on success and left in place on failure, so the requests that arrive while
-  a dead host is timing out get `null` at once instead of queueing behind it. An `outage` of 0, or
-  a cache that cannot hold the marker (the `null` store, an unreachable Memcached), turns off both:
-  every miss reads the database, and a failing one is tried and reported on every view.
-
-- **Reads are bounded.** `PDO::ATTR_TIMEOUT` bounds only the TCP connect. A host that accepts and
-  then says nothing is bounded by `mysqlnd.net_read_timeout`, whose default is a day, so the
-  package sets it to `timeout` seconds for its read and restores the setting afterwards. Laravel
-  retries a lost connection, so one failed attempt can take about four times the larger of the
-  two timeouts.
-
-- **Give the package its own connection.** mysqlnd reads the timeout only when a connection opens.
-  A connection the app opened first keeps its own (a day by default), and one the package opens
-  holds every later query on it to `timeout` seconds until it closes.
-
-- **Posts are cached as arrays, never objects.** The package works with
-  `cache.serializable_classes` set to `false`.
-
-## Configuration
-
-| Key          | Default   | Purpose                                                  |
-|--------------|-----------|----------------------------------------------------------|
-| `connection` | `blog`    | The connection to WordPress's database.                  |
-| `timeout`    | `3`       | MySQL read timeout while the package reads, in seconds.  |
-| `cache`      | `2592000` | Seconds the id list and each post are cached.            |
-| `outage`     | `300`     | Seconds a failing database is left alone.                |
-| `tags`       | see below | Formatting kept from `post_content`; `br` always.        |
-
-The default `tags` are `p`, `h2`, `h3`, `strong`, `em`, `s`, `del`, `sup`, `sub`, `blockquote`,
-`ul`, `ol` and `li`. List formatting elements only: `div`, table parts, form controls and raw-text
-elements such as `plaintext` or `textarea` can break the page around the post.
+- An empty id list is cached for `outage` seconds only, so a new blog's first post shows soon.
+- Any failure (unreachable host, missing table or connection) is reported to the exception handler
+  and leaves the database alone for `outage` seconds.
+- One request at a time reads the database; the others skip uncached posts instead of queueing on
+  a dead host. An `outage` of 0, or a store that cannot hold a key (the `null` store, an
+  unreachable Memcached), turns off this and the outage wait: every miss reads, and a failing
+  database is tried and reported on every view.
+- Posts are cached as arrays, so `cache.serializable_classes` set to `false` works.
 
 ## Testing
 
-In your app's tests, mock it like any other class:
+Mock it in your app's tests:
 
 ```php
 use WordPressPosts\Post;
@@ -166,18 +114,13 @@ $this->mock(WordPressPosts::class)
     ->andReturn(new Post('A title', '<p>A body.</p>'));
 ```
 
-The package's own checks:
-
-```bash
-composer check
-```
+The package's own checks: `composer check`.
 
 ## Upgrading
 
 ### From 1.0
 
-Nothing to change. 1.0.1 caches an empty id list for `outage` seconds instead of `cache`, draws a
-second id when the first post is gone, and skips a post over 200 KB in SQL instead of loading it.
+Nothing to change.
 
 ## Licence
 

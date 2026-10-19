@@ -101,7 +101,7 @@ final class ContentTest extends TestCase
             . '<!-- wp:group {"metadata":{"blockVisibility":false}} --><div>'
             . '<!-- wp:heading {"content":"<em>x</em>"} --><h2>Hidden.</h2><!-- /wp:heading -->'
             . '<!-- /wp:a/b/c --><p>Still hidden.</p></div><!-- /wp:group -->'
-            // A closer with nothing open: WordPress parses no block after it.
+            // A closer with nothing open ends parsing.
             . '<p>B</p><!-- /wp:paragraph -->'
             . '<!-- wp:paragraph {"metadata":{"blockVisibility":false}} --><p>C</p><!-- /wp:paragraph -->',
         ));
@@ -139,10 +139,9 @@ final class ContentTest extends TestCase
 
     public function test_a_crafted_run_of_comments_reduces_in_linear_time(): void
     {
-        // Whitespace between comments once made every text node walk its siblings: this took 11 s.
         $started = microtime(true);
 
-        $this->contentOf('x' . str_repeat(' <?>', 49_999)); // The shortest comment there is, just under the size limit.
+        $this->contentOf('x' . str_repeat(' <?>', 49_999)); // The shortest HTML comment, just under the size limit.
 
         $this->assertLessThan(0.5, microtime(true) - $started);
     }

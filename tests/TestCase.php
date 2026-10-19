@@ -28,7 +28,6 @@ abstract class TestCase extends BaseTestCase
         return app(WordPressPosts::class);
     }
 
-    /** A WordPress `posts` table behind the default `blog` connection, prefixed as WordPress prefixes it. */
     protected function withBlog(bool $withTable = true, string $connection = 'blog'): void
     {
         config(["database.connections.{$connection}" => [

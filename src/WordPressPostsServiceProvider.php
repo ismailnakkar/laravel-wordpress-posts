@@ -10,7 +10,6 @@ class WordPressPostsServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        // No binding: WordPressPosts is stateless and the container autowires it.
         $this->mergeConfigFrom(__DIR__ . '/../config/wordpress-posts.php', 'wordpress-posts');
     }
 
