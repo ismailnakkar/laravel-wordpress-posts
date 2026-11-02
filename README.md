@@ -68,7 +68,8 @@ public function __invoke(WordPressPosts $posts): View
 @endisset
 ```
 
-`random()` returns a `WordPressPosts\Post`, or `null` when nothing can be shown now: the blog has
+`random()` returns a `WordPressPosts\Post`, or `null` when nothing can be shown now: the connection
+has no `database` name (no blog: nothing is read, reported or shown from the cache); the blog has
 no published post; the drawn post (and one redraw) is gone, empty or too large; or the id list or
 that post is not cached while the database is failing or another request is reading it.
 

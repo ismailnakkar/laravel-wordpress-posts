@@ -58,6 +58,10 @@ class WordPressPosts
      */
     public function random(): ?Post
     {
+        if ($this->hasNoBlog()) {
+            return null;
+        }
+
         try {
             $ids = $this->remember(self::IDS_KEY, fn (): array => array_map(intval(...), $this->query()->pluck('ID')->all())) ?? [];
 
@@ -77,6 +81,14 @@ class WordPressPosts
 
             return null;
         }
+    }
+
+    /** A connection with no database name: nothing to read, so no outage. A missing connection is a mistake, reported. */
+    private function hasNoBlog(): bool
+    {
+        $connection = $this->config->get('database.connections.' . $this->config->get('wordpress-posts.connection'));
+
+        return is_array($connection) && blank($connection['database'] ?? null);
     }
 
     private function post(int $id): ?Post

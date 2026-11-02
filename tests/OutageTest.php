@@ -21,6 +21,28 @@ final class OutageTest extends TestCase
         $this->assertTrue(Cache::has('wordpress-posts:outage'));
     }
 
+    public function test_a_connection_with_no_database_name_is_no_blog_not_an_outage(): void
+    {
+        Exceptions::fake();
+        $this->withBlog();
+        $this->seedPost();
+        $this->assertNotNull($this->posts()->random());
+
+        foreach (['', null] as $database) {
+            config(['database.connections.blog' => ['driver' => 'mysql', 'host' => '', 'database' => $database]]);
+            DB::purge('blog');
+
+            $this->assertNull($this->posts()->random(), 'A post cached before the blog was removed stays hidden.');
+
+            Cache::forget('wordpress-posts:ids');
+
+            $this->assertNull($this->posts()->random());
+        }
+
+        Exceptions::assertNothingReported();
+        $this->assertFalse(Cache::has('wordpress-posts:outage'));
+    }
+
     public function test_a_failing_database_is_tried_once_per_outage_window(): void
     {
         // No table fails like a dead host. Count reports: a failing query fires no QueryExecuted.
