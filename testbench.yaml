@@ -1,0 +1,3 @@
+# Larastan boots through Testbench: without the provider it cannot see the wordpress-posts:: views.
+providers:
+  - WordPressPosts\WordPressPostsServiceProvider

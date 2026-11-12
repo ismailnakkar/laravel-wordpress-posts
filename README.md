@@ -2,7 +2,8 @@
 
 Draws a random published post from a WordPress database for a Laravel page, typically as filler
 beside the real content. It reads the database directly and read-only, caches what it reads, reduces
-the post to safe formatting HTML, and returns `null` instead of failing when the blog is down.
+the post to safe formatting HTML, and returns `null` instead of failing when the blog is down. A
+Blade component renders the post, or nothing.
 
 ## Install
 
@@ -51,6 +52,19 @@ elements such as `textarea` can break the page around the post.
 connection, so one failed attempt can take about four times the larger of the two.
 
 ## Usage
+
+```blade
+<x-wordpress-posts::post class="blog-post" />
+```
+
+Each tag draws one post with `random()` and renders nothing, not even its wrapper, when that is
+`null`. Its attributes go on the wrapper, an `<article>` holding the title as `<h2>` and the content.
+
+To change the markup, put your own at `resources/views/vendor/wordpress-posts/components/post.blade.php`
+(`php artisan vendor:publish --tag=wordpress-posts-views` copies the default there). It gets the
+`Post` as `$post` and the tag's `$attributes`.
+
+To work with the `Post` yourself, call `random()`:
 
 ```php
 use WordPressPosts\WordPressPosts;
@@ -115,9 +129,15 @@ $this->mock(WordPressPosts::class)
     ->andReturn(new Post('A title', '<p>A body.</p>'));
 ```
 
+The mock reaches `<x-wordpress-posts::post />` too.
+
 The package's own checks: `composer check`.
 
 ## Upgrading
+
+### From 1.1
+
+Nothing to change.
 
 ### From 1.0
 
