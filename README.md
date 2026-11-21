@@ -131,7 +131,15 @@ $this->mock(WordPressPosts::class)
 
 The mock reaches `<x-wordpress-posts::post />` too.
 
-The package's own checks: `composer check`.
+## API
+
+| | |
+|---|---|
+| `<x-wordpress-posts::post />` | Draws a post and renders it, or nothing. Attributes go on the wrapper. |
+| `random(): ?Post` on an injected `WordPressPosts\WordPressPosts` | A drawn post, or `null` ([Usage](#usage)). |
+| `WordPressPosts\Post` | Readonly `title` (plain text) and `content` (safe HTML). |
+| `wordpress-posts:ids`, `wordpress-posts:post:{id}` | The cache keys to forget ([Caching and outages](#caching-and-outages)). |
+| `wordpress-posts-config`, `wordpress-posts-views` | The `vendor:publish` tags. |
 
 ## Upgrading
 
@@ -142,6 +150,10 @@ Nothing to change.
 ### From 1.0
 
 Nothing to change.
+
+## Development
+
+`composer check` runs Pint (`--test`), PHPStan, then PHPUnit on SQLite in memory.
 
 ## Licence
 

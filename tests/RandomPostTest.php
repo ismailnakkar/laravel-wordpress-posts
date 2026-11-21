@@ -121,11 +121,7 @@ final class RandomPostTest extends TestCase
 
     public function test_the_read_timeout_is_short_while_reading_and_restored_after(): void
     {
-        $previous = ini_get('mysqlnd.net_read_timeout');
-
-        if ($previous === false) {
-            $this->markTestSkipped('mysqlnd is not loaded.');
-        }
+        $previous = $this->readTimeoutOrSkip();
 
         config(['wordpress-posts.timeout' => 7]);
         $this->withBlog();
@@ -144,11 +140,7 @@ final class RandomPostTest extends TestCase
 
     public function test_the_cache_is_used_under_the_apps_read_timeout(): void
     {
-        $previous = ini_get('mysqlnd.net_read_timeout');
-
-        if ($previous === false) {
-            $this->markTestSkipped('mysqlnd is not loaded.');
-        }
+        $previous = $this->readTimeoutOrSkip();
 
         config(['wordpress-posts.timeout' => 7]);
         $this->withBlog();
@@ -166,11 +158,7 @@ final class RandomPostTest extends TestCase
 
     public function test_a_failed_read_restores_the_read_timeout(): void
     {
-        $previous = ini_get('mysqlnd.net_read_timeout');
-
-        if ($previous === false) {
-            $this->markTestSkipped('mysqlnd is not loaded.');
-        }
+        $previous = $this->readTimeoutOrSkip();
 
         Exceptions::fake();
         config(['wordpress-posts.timeout' => 7]);
@@ -183,9 +171,7 @@ final class RandomPostTest extends TestCase
 
     public function test_a_fractional_timeout_is_raised_to_a_whole_second(): void
     {
-        if (ini_get('mysqlnd.net_read_timeout') === false) {
-            $this->markTestSkipped('mysqlnd is not loaded.');
-        }
+        $this->readTimeoutOrSkip();
 
         config(['wordpress-posts.timeout' => 0.5]);
         $this->withBlog();
@@ -265,5 +251,17 @@ final class RandomPostTest extends TestCase
         foreach (range(1, 32) as $ignored) {
             $this->assertSame('Kept', $this->posts()->random()?->title);
         }
+    }
+
+    /** The current mysqlnd.net_read_timeout; without mysqlnd the test is skipped. */
+    private function readTimeoutOrSkip(): string
+    {
+        $timeout = ini_get('mysqlnd.net_read_timeout');
+
+        if ($timeout === false) {
+            $this->markTestSkipped('mysqlnd is not loaded.');
+        }
+
+        return $timeout;
     }
 }

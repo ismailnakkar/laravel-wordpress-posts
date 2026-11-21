@@ -63,7 +63,7 @@ class WordPressPosts
         }
 
         try {
-            $ids = $this->remember(self::IDS_KEY, fn (): array => array_map(intval(...), $this->query()->pluck('ID')->all())) ?? [];
+            $ids = $this->remember(self::IDS_KEY, $this->publishedIds(...)) ?? [];
 
             // A second draw when the first is gone: a deleted post stays in the cached list.
             $keys = $ids === [] ? [] : (array)array_rand($ids, min(2, count($ids)));
@@ -93,29 +93,42 @@ class WordPressPosts
 
     private function post(int $id): ?Post
     {
-        // `false`, not null: a cached null reads as a miss. An array, not a Post: an app's cache may
-        // refuse objects (`cache.serializable_classes`).
-        $post = $this->remember(self::POST_KEY . $id, function () use ($id): array|false {
-            // A too-long body comes back null, never loaded into PHP.
-            $row = $this->query()->where('ID', $id)->selectRaw(
-                'post_title, CASE WHEN LENGTH(post_content) > ? THEN NULL ELSE post_content END AS post_content',
-                [self::MAX_BYTES],
-            )->first();
-
-            if ($row === null || $row->post_content === null) {
-                return false;
-            }
-
-            $content = $this->content((string)$row->post_content);
-
-            // Images, embeds and hidden blocks alone leave no text to show. `\S` skips `&nbsp;` too.
-            return preg_match('/\S/u', strip_tags($content)) !== 1 ? false : [
-                'title'   => $this->title((string)$row->post_title),
-                'content' => $content,
-            ];
-        });
+        $post = $this->remember(self::POST_KEY . $id, fn (): array|false => $this->readPost($id));
 
         return is_array($post) ? new Post($post['title'], $post['content']) : null;
+    }
+
+    /** @return array<int, int> */
+    private function publishedIds(): array
+    {
+        return array_map(intval(...), $this->query()->pluck('ID')->all());
+    }
+
+    /**
+     * `false`, not null, for a post to skip: a cached null reads as a miss. An array, not a Post: an app's cache may
+     * refuse objects (`cache.serializable_classes`).
+     *
+     * @return array{title: string, content: string}|false
+     */
+    private function readPost(int $id): array|false
+    {
+        // A too-long body comes back null, never loaded into PHP.
+        $row = $this->query()->where('ID', $id)->selectRaw(
+            'post_title, CASE WHEN LENGTH(post_content) > ? THEN NULL ELSE post_content END AS post_content',
+            [self::MAX_BYTES],
+        )->first();
+
+        if ($row === null || $row->post_content === null) {
+            return false;
+        }
+
+        $content = $this->content((string)$row->post_content);
+
+        // Images, embeds and hidden blocks alone leave no text to show. `\S` skips `&nbsp;` too.
+        return preg_match('/\S/u', strip_tags($content)) !== 1 ? false : [
+            'title'   => $this->title((string)$row->post_title),
+            'content' => $content,
+        ];
     }
 
     /**
