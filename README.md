@@ -36,20 +36,18 @@ Name it `blog`, or set `WORDPRESS_POSTS_CONNECTION`. Its user needs only
 
 ## Configuration
 
-| Key          | Default             | Purpose                                                  |
-|--------------|---------------------|----------------------------------------------------------|
-| `connection` | `blog`              | Connection to WordPress's database.                      |
-| `timeout`    | `3`                 | `mysqlnd.net_read_timeout`, whole seconds, at least 1.   |
-| `cache`      | `2592000` (30 days) | Seconds the id list and each drawn post stay cached.     |
-| `outage`     | `300`               | Seconds a failing database is left alone.                |
-| `tags`       | see below           | Elements kept from `post_content`.                       |
+| Key          | Default   | Purpose                             |
+|--------------|-----------|-------------------------------------|
+| `connection` | `blog`    | Connection to WordPress's database. |
+| `tags`       | see below | Elements kept from `post_content`.  |
 
 `tags` defaults to `p`, `h2`, `h3`, `strong`, `em`, `s`, `del`, `sup`, `sub`, `blockquote`, `ul`,
 `ol` and `li`. List formatting elements only: `div`, table parts, form controls and raw-text
 elements such as `textarea` can break the page around the post.
 
-`PDO::ATTR_TIMEOUT` bounds only the connect, `timeout` the reads; Laravel retries a lost
-connection, so one failed attempt can take about four times the larger of the two.
+`PDO::ATTR_TIMEOUT` bounds only the connect; the package reads under a 3-second
+`mysqlnd.net_read_timeout`. Laravel retries a lost connection, so one failed attempt can take about
+four times the larger of the two.
 
 ## Usage
 
@@ -100,20 +98,21 @@ that post is not cached while the database is failing or another request is read
 
 ## Caching and outages
 
-- New, edited or deleted posts and `tags` changes show when the cache expires. To apply one now:
+- The id list and each drawn post stay cached for 30 days. New, edited or deleted posts and `tags`
+  changes show when the cache expires. To apply one now:
 
   ```php
   Cache::forget('wordpress-posts:post:' . $id); // the post
   Cache::forget('wordpress-posts:ids');         // the list it is drawn from
   ```
 
-- An empty id list is cached for `outage` seconds only, so a new blog's first post shows soon.
+- An empty id list is cached for 5 minutes only, so a new blog's first post shows soon.
 - Any failure (unreachable host, missing table or connection) is reported to the exception handler
-  and leaves the database alone for `outage` seconds.
+  and leaves the database alone for 5 minutes.
 - One request at a time reads the database; the others skip uncached posts instead of queueing on
-  a dead host. An `outage` of 0, or a store that cannot hold a key (the `null` store, an
-  unreachable Memcached), turns off this and the outage wait: every miss reads, and a failing
-  database is tried and reported on every view.
+  a dead host. A store that cannot hold a key (the `null` store, an unreachable Memcached) turns
+  off this and the outage wait: every miss reads, and a failing database is tried and reported on
+  every view.
 - Posts are cached as arrays, so `cache.serializable_classes` set to `false` works.
 
 ## Testing
@@ -142,6 +141,15 @@ The mock reaches `<x-wordpress-posts::post />` too.
 | `wordpress-posts-config`, `wordpress-posts-views` | The `vendor:publish` tags. |
 
 ## Upgrading
+
+### From 1.2
+
+The `timeout`, `cache` and `outage` config keys are gone. The package keeps their 1.x defaults:
+a 3-second read timeout, posts cached for 30 days, a failing database left alone for 5 minutes.
+
+- Require `^2.0`.
+- A published `config/wordpress-posts.php`: delete the three keys. They are ignored now, so a value
+  other than the default no longer applies.
 
 ### From 1.1
 

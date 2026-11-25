@@ -24,6 +24,15 @@ class WordPressPosts
 
     private const string OUTAGE_KEY = 'wordpress-posts:outage';
 
+    /** mysqlnd.net_read_timeout while the package reads. */
+    private const int READ_TIMEOUT_SECONDS = 3;
+
+    /** Seconds the published-id list and each drawn post stay cached. */
+    private const int CACHE_SECONDS = 60 * 60 * 24 * 30;
+
+    /** Seconds a failing database is left alone. */
+    private const int OUTAGE_SECONDS = 300;
+
     /** Longer posts are skipped: no real one is this long, and a crafted one costs seconds to parse. */
     private const int MAX_BYTES = 200_000;
 
@@ -148,16 +157,16 @@ class WordPressPosts
             return $value;
         }
 
-        // Refused with no marker: the store cannot keep one (`outage` 0, null store), so read unclaimed.
-        if (! $this->cache->add(self::OUTAGE_KEY, true, (int)$this->config->get('wordpress-posts.outage'))
+        // Refused with no marker: the store cannot keep one (null store), so read unclaimed.
+        if (! $this->cache->add(self::OUTAGE_KEY, true, self::OUTAGE_SECONDS)
             && $this->cache->has(self::OUTAGE_KEY)) {
             return null;
         }
 
         // PDO::ATTR_TIMEOUT bounds only the connect; a silent host would hold the page for mysqlnd's
-        // default day. mysqlnd reads this when a connection opens, warns on a fraction and takes 0 as
-        // unbounded. Around the read alone: a cache connection opened under it would keep it too.
-        $readTimeout = ini_set('mysqlnd.net_read_timeout', (string)max(1, (int)$this->config->get('wordpress-posts.timeout')));
+        // default day. mysqlnd reads this when a connection opens. Around the read alone: a cache
+        // connection opened under it would keep it too.
+        $readTimeout = ini_set('mysqlnd.net_read_timeout', (string)self::READ_TIMEOUT_SECONDS);
 
         try {
             $value = $read();
@@ -168,7 +177,7 @@ class WordPressPosts
         }
 
         // An empty list is cached only for the outage window, so a new blog's first post shows soon.
-        $this->cache->put($key, $value, (int)$this->config->get($value === [] ? 'wordpress-posts.outage' : 'wordpress-posts.cache'));
+        $this->cache->put($key, $value, $value === [] ? self::OUTAGE_SECONDS : self::CACHE_SECONDS);
         $this->cache->forget(self::OUTAGE_KEY);
 
         return $value;

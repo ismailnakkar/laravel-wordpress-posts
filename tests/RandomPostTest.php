@@ -69,9 +69,8 @@ final class RandomPostTest extends TestCase
         $this->assertSame('From elsewhere', $this->posts()->random()?->title);
     }
 
-    public function test_the_id_list_is_cached_for_the_configured_lifetime(): void
+    public function test_the_id_list_is_cached_for_thirty_days(): void
     {
-        config(['wordpress-posts.cache' => 60]);
         $this->withBlog();
         $this->seedPost(['post_title' => 'Cached once']);
 
@@ -80,16 +79,15 @@ final class RandomPostTest extends TestCase
         DB::connection('blog')->table('posts')->delete();
         $this->seedPost(['post_title' => 'Published since']);
 
-        $this->travel(59)->seconds();
+        $this->travelTo(now()->addDays(30)->subSecond());
         $this->assertSame('Cached once', $this->posts()->random()?->title);
 
         $this->travel(2)->seconds();
         $this->assertSame('Published since', $this->posts()->random()?->title);
     }
 
-    public function test_a_post_is_cached_for_the_configured_lifetime(): void
+    public function test_a_post_is_cached_for_thirty_days(): void
     {
-        config(['wordpress-posts.cache' => 60]);
         $this->withBlog();
         $id = $this->seedPost(['post_title' => 'Before']);
 
@@ -97,7 +95,7 @@ final class RandomPostTest extends TestCase
 
         DB::connection('blog')->table('posts')->where('ID', $id)->update(['post_title' => 'After']);
 
-        $this->travel(59)->seconds();
+        $this->travelTo(now()->addDays(30)->subSecond());
         $this->assertSame('Before', $this->posts()->random()?->title);
 
         $this->travel(2)->seconds();
@@ -123,7 +121,6 @@ final class RandomPostTest extends TestCase
     {
         $previous = $this->readTimeoutOrSkip();
 
-        config(['wordpress-posts.timeout' => 7]);
         $this->withBlog();
         $this->seedPost();
 
@@ -134,7 +131,7 @@ final class RandomPostTest extends TestCase
 
         $this->posts()->random();
 
-        $this->assertSame(['7', '7'], $during, 'The id list and the post are each read under it.');
+        $this->assertSame(['3', '3'], $during, 'The id list and the post are each read under it.');
         $this->assertSame($previous, ini_get('mysqlnd.net_read_timeout'));
     }
 
@@ -142,7 +139,6 @@ final class RandomPostTest extends TestCase
     {
         $previous = $this->readTimeoutOrSkip();
 
-        config(['wordpress-posts.timeout' => 7]);
         $this->withBlog();
         $this->seedPost();
 
@@ -161,29 +157,11 @@ final class RandomPostTest extends TestCase
         $previous = $this->readTimeoutOrSkip();
 
         Exceptions::fake();
-        config(['wordpress-posts.timeout' => 7]);
         $this->withBlog(withTable: false);
 
         $this->assertNull($this->posts()->random());
         Exceptions::assertReportedCount(1);
         $this->assertSame($previous, ini_get('mysqlnd.net_read_timeout'));
-    }
-
-    public function test_a_fractional_timeout_is_raised_to_a_whole_second(): void
-    {
-        $this->readTimeoutOrSkip();
-
-        config(['wordpress-posts.timeout' => 0.5]);
-        $this->withBlog();
-        $this->seedPost();
-
-        $during = null;
-        DB::connection('blog')->listen(function () use (&$during): void {
-            $during = ini_get('mysqlnd.net_read_timeout');
-        });
-
-        $this->assertNotNull($this->posts()->random());
-        $this->assertSame('1', $during);
     }
 
     public function test_each_post_is_cached_once_and_as_an_array(): void

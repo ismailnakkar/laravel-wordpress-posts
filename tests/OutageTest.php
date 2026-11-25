@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace WordPressPosts\Tests;
 
 use Illuminate\Cache\Events\KeyWritten;
+use Illuminate\Cache\NullStore;
+use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -47,14 +49,13 @@ final class OutageTest extends TestCase
     {
         // No table fails like a dead host. Count reports: a failing query fires no QueryExecuted.
         Exceptions::fake();
-        config(['wordpress-posts.outage' => 10]);
         $this->withBlog(withTable: false);
 
         $this->assertNull($this->posts()->random());
         $this->assertNull($this->posts()->random());
         Exceptions::assertReportedCount(1);
 
-        $this->travel(9)->seconds();
+        $this->travel(299)->seconds();
         $this->assertNull($this->posts()->random());
         Exceptions::assertReportedCount(1);
 
@@ -90,9 +91,9 @@ final class OutageTest extends TestCase
         $this->assertSame([], $written, 'A refused claim caches nothing.');
     }
 
-    public function test_a_zero_outage_window_still_reads_the_blog(): void
+    public function test_a_store_that_cannot_hold_the_marker_still_reads_the_blog(): void
     {
-        config(['wordpress-posts.outage' => 0]);
+        $this->instance(Repository::class, Cache::repository(new NullStore));
         $this->withBlog();
         $this->seedPost(['post_title' => 'Read']);
 
